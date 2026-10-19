@@ -144,7 +144,8 @@ main {
 }
 
 .info-btn,
-.wiki-btn {
+.wiki-btn,
+.gear-btn {
   width: 22px;
   height: 22px;
   padding: 0;
@@ -162,18 +163,26 @@ main {
   text-decoration: none;
 }
 
+.gear-btn {
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
 .info-btn:hover,
 .info-btn:focus-visible,
 .wiki-btn:hover,
-.wiki-btn:focus-visible {
+.wiki-btn:focus-visible,
+.gear-btn:hover,
+.gear-btn:focus-visible {
   background: #4e79a7;
   border-color: #4e79a7;
   color: #fff;
   outline: none;
 }
 
-/* Info dialog */
-dialog#info-dialog {
+/* Info & settings dialogs */
+dialog#info-dialog,
+dialog#settings-dialog {
   border: 1px solid #dee2e6;
   border-radius: 8px;
   padding: 0;
@@ -182,8 +191,116 @@ dialog#info-dialog {
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
 }
 
-dialog#info-dialog::backdrop {
+dialog#info-dialog::backdrop,
+dialog#settings-dialog::backdrop {
   background: rgba(0,0,0,0.35);
+}
+
+.range-row {
+  margin-bottom: 0.9rem;
+}
+
+.range-row label {
+  display: block;
+  margin-bottom: 0.6rem;
+  color: #343a40;
+  font-size: 0.9rem;
+}
+
+/* Dual-thumb range control: grey base track, blue fill between thumbs */
+.range-track {
+  position: relative;
+  height: 24px;
+  margin: 0 10px; /* half a thumb at each end, so thumbs reach the track ends */
+}
+
+.range-track::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: #dee2e6;
+}
+
+.range-fill {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 3px;
+  background: #4e79a7;
+  pointer-events: none;
+}
+
+.range-slider.dual {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  pointer-events: none; /* only the thumbs are interactive */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range-slider.dual::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+.range-slider.dual::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #4e79a7;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+  margin-top: 2px; /* centre in the 24px-high track */
+}
+
+.range-slider.dual::-moz-range-track {
+  height: 100%;
+  background: transparent;
+  border: none;
+}
+
+.range-slider.dual::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #4e79a7;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+#range-start { z-index: 3; }
+#range-end { z-index: 4; }
+
+.range-slider.dual:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(78,121,167,0.35);
+}
+
+.range-slider.dual:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(78,121,167,0.35);
+}
+
+.range-summary {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #868e96;
 }
 
 .dialog-header {

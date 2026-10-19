@@ -2,12 +2,17 @@ package scan
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
-	"math"
 	"strings"
 	"time"
+)
+
+// Certificate Transparency extension OIDs
+// (id-ct-signedCertificateTimestampList / id-ct-poison both live here)
+var (
+	oidCTSCTs        = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 2}
+	oidCTPrecertSCTs = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 2}
 )
 
 // TLS version names
@@ -25,23 +30,23 @@ var sslVersionNames = map[string]string{
 
 // Cipher suite names (common ones)
 var cipherSuiteNames = map[uint16]string{
-	tls.TLS_RSA_WITH_AES_128_CBC_SHA:               "TLS_RSA_WITH_AES_128_CBC_SHA",
-	tls.TLS_RSA_WITH_AES_256_CBC_SHA:               "TLS_RSA_WITH_AES_256_CBC_SHA",
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256:            "TLS_RSA_WITH_AES_128_GCM_SHA256",
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384:            "TLS_RSA_WITH_AES_256_GCM_SHA384",
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:         "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
-	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:         "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:      "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:       "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:       "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305:       "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
-	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305:     "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
-	tls.TLS_AES_128_GCM_SHA256:                     "TLS_AES_128_GCM_SHA256",
-	tls.TLS_AES_256_GCM_SHA384:                     "TLS_AES_256_GCM_SHA384",
-	tls.TLS_CHACHA20_POLY1305_SHA256:               "TLS_CHACHA20_POLY1305_SHA256",
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA:            "TLS_RSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_RSA_WITH_AES_256_CBC_SHA:            "TLS_RSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256:         "TLS_RSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384:         "TLS_RSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:      "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:      "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:   "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:    "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:    "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384: "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305:    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305:  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+	tls.TLS_AES_128_GCM_SHA256:                  "TLS_AES_128_GCM_SHA256",
+	tls.TLS_AES_256_GCM_SHA384:                  "TLS_AES_256_GCM_SHA384",
+	tls.TLS_CHACHA20_POLY1305_SHA256:            "TLS_CHACHA20_POLY1305_SHA256",
 }
 
 // aggregateTLSVersions returns distribution of TLS/SSL versions negotiated/supported.
@@ -253,18 +258,18 @@ func aggregateCT(results *ScanResults) map[string]int {
 
 // Extension OIDs we track
 var extensionOIDs = map[string]asn1.ObjectIdentifier{
-	"key-usage":            {2, 5, 29, 15},
-	"extended-key-usage":   {2, 5, 29, 37},
-	"basic-constraints":    {2, 5, 29, 19},
-	"subject-key-id":       {2, 5, 29, 14},
-	"authority-key-id":     {2, 5, 29, 35},
-	"subject-alt-name":     {2, 5, 29, 17},
-	"crl-distribution":     {2, 5, 29, 31},
+	"key-usage":             {2, 5, 29, 15},
+	"extended-key-usage":    {2, 5, 29, 37},
+	"basic-constraints":     {2, 5, 29, 19},
+	"subject-key-id":        {2, 5, 29, 14},
+	"authority-key-id":      {2, 5, 29, 35},
+	"subject-alt-name":      {2, 5, 29, 17},
+	"crl-distribution":      {2, 5, 29, 31},
 	"authority-info-access": {1, 3, 6, 1, 5, 5, 7, 1, 1},
-	"certificate-policies": {2, 5, 29, 32},
-	"ocsp-must-staple":     {1, 3, 6, 1, 5, 5, 7, 1, 24},
-	"ct-precert-scts":      {1, 3, 6, 1, 4, 1, 11129, 2, 4, 2},
-	"ct-scts":              {1, 3, 6, 1, 4, 1, 11129, 2, 4, 5},
+	"certificate-policies":  {2, 5, 29, 32},
+	"ocsp-must-staple":      {1, 3, 6, 1, 5, 5, 7, 1, 24},
+	"ct-precert-scts":       {1, 3, 6, 1, 4, 1, 11129, 2, 4, 2},
+	"ct-scts":               {1, 3, 6, 1, 4, 1, 11129, 2, 4, 5},
 }
 
 // aggregateExtensions returns presence of key extensions.
@@ -420,16 +425,4 @@ func aggregateExpiredCerts(results *ScanResults) map[string]int {
 		}
 	}
 	return counts
-}
-	if len(sorted) == 0 {
-		return 0
-	}
-	idx := int(math.Ceil(p/100.0*float64(len(sorted)))) - 1
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(sorted) {
-		idx = len(sorted) - 1
-	}
-	return sorted[idx]
 }

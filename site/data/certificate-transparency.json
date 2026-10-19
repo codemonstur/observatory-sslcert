@@ -1,7 +1,50 @@
 [
-  {"timestamp":"2026-01-01T00:00:00Z","sample_size":2500,"data":{"with-scts":2200,"without-scts":300}},
-  {"timestamp":"2026-01-08T00:00:00Z","sample_size":2500,"data":{"with-scts":2250,"without-scts":250}},
-  {"timestamp":"2026-01-15T00:00:00Z","sample_size":2500,"data":{"with-scts":2300,"without-scts":200}},
-  {"timestamp":"2026-01-22T00:00:00Z","sample_size":2500,"data":{"with-scts":2350,"without-scts":150}},
-  {"timestamp":"2026-01-29T00:00:00Z","sample_size":2500,"data":{"with-scts":2400,"without-scts":100}}
+  {
+    "timestamp": "2026-01-01T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "with-scts": 2200,
+      "without-scts": 300
+    }
+  },
+  {
+    "timestamp": "2026-01-08T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "with-scts": 2250,
+      "without-scts": 250
+    }
+  },
+  {
+    "timestamp": "2026-01-15T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "with-scts": 2300,
+      "without-scts": 200
+    }
+  },
+  {
+    "timestamp": "2026-01-22T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "with-scts": 2350,
+      "without-scts": 150
+    }
+  },
+  {
+    "timestamp": "2026-01-29T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "with-scts": 2400,
+      "without-scts": 100
+    }
+  },
+  {
+    "timestamp": "2026-10-19T14:40:04Z",
+    "sample_size": 1664,
+    "data": {
+      "with-scts": 1653,
+      "without-scts": 11
+    }
+  }
 ]

@@ -1,0 +1,57 @@
+name: Weekly Certificate Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
+  workflow_dispatch:      # Manual trigger
+
+permissions:
+  contents: write  # Needed to commit updated JSON files
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history for git commit
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Build scanner
+        run: |
+          cd scanner
+          go build -o scanner .
+
+      - name: Run scan (2500 domains)
+        run: |
+          ./scanner/scanner \
+            -sample 2500 \
+            -output site/data \
+            -timeout 10 \
+            -concurrency 50 \
+            -user-agent "CertificateObservatory/1.0 (+https://github.com/youruser/observatory-sslcert)"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet site/data/; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push updated data
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/
+          git commit -m "chore: update certificate data $(date -u +%Y-%m-%d)"
+          git push

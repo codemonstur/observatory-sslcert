@@ -38,5 +38,13 @@
       "expired": 6,
       "not-expired": 2494
     }
+  },
+  {
+    "timestamp": "2026-10-19T14:40:04Z",
+    "sample_size": 1664,
+    "data": {
+      "expired": 16,
+      "not-expired": 1648
+    }
   }
 ]

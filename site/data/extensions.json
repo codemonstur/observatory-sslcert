@@ -1,7 +1,110 @@
 [
-  {"timestamp":"2026-01-01T00:00:00Z","sample_size":2500,"data":{"key-usage":2450,"extended-key-usage":2400,"basic-constraints":2500,"subject-key-id":2480,"authority-key-id":2470,"subject-alt-name":2500,"crl-distribution":2300,"authority-info-access":2400,"certificate-policies":2200,"ocsp-must-staple":50,"ct-precert-scts":2000,"ct-scts":2200}},
-  {"timestamp":"2026-01-08T00:00:00Z","sample_size":2500,"data":{"key-usage":2460,"extended-key-usage":2410,"basic-constraints":2500,"subject-key-id":2485,"authority-key-id":2475,"subject-alt-name":2500,"crl-distribution":2320,"authority-info-access":2410,"certificate-policies":2220,"ocsp-must-staple":60,"ct-precert-scts":2050,"ct-scts":2250}},
-  {"timestamp":"2026-01-15T00:00:00Z","sample_size":2500,"data":{"key-usage":2470,"extended-key-usage":2420,"basic-constraints":2500,"subject-key-id":2490,"authority-key-id":2480,"subject-alt-name":2500,"crl-distribution":2340,"authority-info-access":2420,"certificate-policies":2240,"ocsp-must-staple":70,"ct-precert-scts":2100,"ct-scts":2300}},
-  {"timestamp":"2026-01-22T00:00:00Z","sample_size":2500,"data":{"key-usage":2480,"extended-key-usage":2430,"basic-constraints":2500,"subject-key-id":2495,"authority-key-id":2485,"subject-alt-name":2500,"crl-distribution":2360,"authority-info-access":2430,"certificate-policies":2260,"ocsp-must-staple":80,"ct-precert-scts":2150,"ct-scts":2350}},
-  {"timestamp":"2026-01-29T00:00:00Z","sample_size":2500,"data":{"key-usage":2490,"extended-key-usage":2440,"basic-constraints":2500,"subject-key-id":2500,"authority-key-id":2490,"subject-alt-name":2500,"crl-distribution":2380,"authority-info-access":2440,"certificate-policies":2280,"ocsp-must-staple":90,"ct-precert-scts":2200,"ct-scts":2400}}
+  {
+    "timestamp": "2026-01-01T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "authority-info-access": 2400,
+      "authority-key-id": 2470,
+      "basic-constraints": 2500,
+      "certificate-policies": 2200,
+      "crl-distribution": 2300,
+      "ct-precert-scts": 2000,
+      "ct-scts": 2200,
+      "extended-key-usage": 2400,
+      "key-usage": 2450,
+      "ocsp-must-staple": 50,
+      "subject-alt-name": 2500,
+      "subject-key-id": 2480
+    }
+  },
+  {
+    "timestamp": "2026-01-08T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "authority-info-access": 2410,
+      "authority-key-id": 2475,
+      "basic-constraints": 2500,
+      "certificate-policies": 2220,
+      "crl-distribution": 2320,
+      "ct-precert-scts": 2050,
+      "ct-scts": 2250,
+      "extended-key-usage": 2410,
+      "key-usage": 2460,
+      "ocsp-must-staple": 60,
+      "subject-alt-name": 2500,
+      "subject-key-id": 2485
+    }
+  },
+  {
+    "timestamp": "2026-01-15T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "authority-info-access": 2420,
+      "authority-key-id": 2480,
+      "basic-constraints": 2500,
+      "certificate-policies": 2240,
+      "crl-distribution": 2340,
+      "ct-precert-scts": 2100,
+      "ct-scts": 2300,
+      "extended-key-usage": 2420,
+      "key-usage": 2470,
+      "ocsp-must-staple": 70,
+      "subject-alt-name": 2500,
+      "subject-key-id": 2490
+    }
+  },
+  {
+    "timestamp": "2026-01-22T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "authority-info-access": 2430,
+      "authority-key-id": 2485,
+      "basic-constraints": 2500,
+      "certificate-policies": 2260,
+      "crl-distribution": 2360,
+      "ct-precert-scts": 2150,
+      "ct-scts": 2350,
+      "extended-key-usage": 2430,
+      "key-usage": 2480,
+      "ocsp-must-staple": 80,
+      "subject-alt-name": 2500,
+      "subject-key-id": 2495
+    }
+  },
+  {
+    "timestamp": "2026-01-29T00:00:00Z",
+    "sample_size": 2500,
+    "data": {
+      "authority-info-access": 2440,
+      "authority-key-id": 2490,
+      "basic-constraints": 2500,
+      "certificate-policies": 2280,
+      "crl-distribution": 2380,
+      "ct-precert-scts": 2200,
+      "ct-scts": 2400,
+      "extended-key-usage": 2440,
+      "key-usage": 2490,
+      "ocsp-must-staple": 90,
+      "subject-alt-name": 2500,
+      "subject-key-id": 2500
+    }
+  },
+  {
+    "timestamp": "2026-10-19T14:40:04Z",
+    "sample_size": 1664,
+    "data": {
+      "authority-info-access": 1654,
+      "authority-key-id": 1660,
+      "basic-constraints": 1661,
+      "certificate-policies": 1654,
+      "crl-distribution": 1567,
+      "ct-precert-scts": 1653,
+      "ct-scts": 0,
+      "extended-key-usage": 1659,
+      "key-usage": 1659,
+      "ocsp-must-staple": 0,
+      "subject-alt-name": 1659,
+      "subject-key-id": 1654
+    }
+  }
 ]

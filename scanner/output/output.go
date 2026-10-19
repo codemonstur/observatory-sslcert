@@ -20,15 +20,20 @@ type Snapshot struct {
 type MetricHistory []Snapshot
 
 // LoadHistory reads all JSON files from the output directory.
-func LoadHistory(outputDir string) (map[string][]Snapshot, error) {
+// Missing files/directories are fine (a metric just starts fresh).
+// A file that is empty or corrupt is skipped with a warning rather than
+// failing the whole load, so one bad file cannot wipe the other metrics'
+// history.
+func LoadHistory(outputDir string) (map[string][]Snapshot, []string, error) {
 	history := make(map[string][]Snapshot)
+	var warnings []string
 
 	entries, err := os.ReadDir(outputDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return history, nil
+			return history, warnings, nil
 		}
-		return nil, err
+		return nil, warnings, err
 	}
 
 	for _, entry := range entries {
@@ -40,17 +45,21 @@ func LoadHistory(outputDir string) (map[string][]Snapshot, error) {
 
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
+			warnings = append(warnings, fmt.Sprintf("skip %s: %v", path, err))
+			continue
 		}
 
 		var snapshots []Snapshot
-		if err := json.Unmarshal(data, &snapshots); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+		if len(data) > 0 {
+			if err := json.Unmarshal(data, &snapshots); err != nil {
+				warnings = append(warnings, fmt.Sprintf("skip %s: %v", path, err))
+				continue
+			}
 		}
 		history[metricName] = snapshots
 	}
 
-	return history, nil
+	return history, warnings, nil
 }
 
 // WriteHistory writes all metrics to JSON files in the output directory.

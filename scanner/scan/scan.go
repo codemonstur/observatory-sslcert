@@ -28,16 +28,13 @@ type Result struct {
 }
 
 type HandshakeInfo struct {
-	Version            uint16
-	CipherSuite        uint16
-	ServerName         string
-	Resumed            bool
-	OCSPStapled        bool
-	SCTs               [][]byte
-	SupportedVersions  []uint16
-	SupportedGroups    []tls.CurveID
-	SupportedSigAlgs   []tls.SignatureScheme
-	SSLVersions        []string // SSL 3.0 (detected via openssl)
+	Version     uint16
+	CipherSuite uint16
+	ServerName  string
+	Resumed     bool
+	OCSPStapled bool
+	SCTs        [][]byte
+	SSLVersions []string // SSL 3.0 (detected via openssl)
 }
 
 type ScanResults struct {
@@ -136,7 +133,6 @@ func (s *Scanner) scanIP(ctx context.Context, domain, ip string) Result {
 
 	state := tlsConn.ConnectionState()
 	certs := state.PeerCertificates
-	verifiedChains := state.VerifiedChains
 
 	// Check OCSP stapling
 	ocspStapled := len(state.OCSPResponse) > 0
@@ -156,16 +152,13 @@ func (s *Scanner) scanIP(ctx context.Context, domain, ip string) Result {
 
 	// Build handshake info
 	handshake := &HandshakeInfo{
-		Version:           state.Version,
-		CipherSuite:       state.CipherSuite,
-		ServerName:        state.ServerName,
-		Resumed:           state.DidResume,
-		OCSPStapled:       ocspStapled,
-		SCTs:              scts,
-		SupportedVersions: state.SupportedVersions,
-		SupportedGroups:   state.SupportedGroups,
-		SupportedSigAlgs:  state.SupportedSignatureAlgorithms,
-		SSLVersions:       sslVersions,
+		Version:     state.Version,
+		CipherSuite: state.CipherSuite,
+		ServerName:  state.ServerName,
+		Resumed:     state.DidResume,
+		OCSPStapled: ocspStapled,
+		SCTs:        scts,
+		SSLVersions: sslVersions,
 	}
 
 	return Result{
@@ -204,8 +197,8 @@ func probeSSL(domain, ip string) []string {
 }
 
 // Aggregate computes all metrics from scan results.
-func Aggregate(results *ScanResults) map[string]interface{} {
-	metrics := make(map[string]interface{})
+func Aggregate(results *ScanResults) map[string]map[string]int {
+	metrics := make(map[string]map[string]int)
 
 	metrics["tls-versions"] = aggregateTLSVersions(results)
 	metrics["cipher-suites"] = aggregateCipherSuites(results)

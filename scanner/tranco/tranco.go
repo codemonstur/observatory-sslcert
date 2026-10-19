@@ -3,6 +3,7 @@ package tranco
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -31,12 +32,17 @@ func FetchTop1M(url string) ([]string, error) {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	// Tranco provides a zip file containing top-1m.csv
-	zipReader, err := zip.NewReader(resp.Body, resp.ContentLength)
+	// Tranco provides a zip file containing top-1m.csv.
+	// Buffer in memory: zip.NewReader needs an io.ReaderAt, which the
+	// streaming resp.Body does not implement.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	zipReader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		// Maybe it's not zipped? Try reading as plain CSV
-		resp.Body = io.NopCloser(strings.NewReader("")) // Can't re-read, but we'll handle below
-		return parseCSV(resp.Body)
+		return parseCSV(bytes.NewReader(body))
 	}
 
 	for _, f := range zipReader.File {

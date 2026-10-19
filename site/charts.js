@@ -4,6 +4,9 @@
 import uPlot from './lib/dist/uPlot.esm.js';
 
 const DATA_DIR = 'data/';
+// Default number of snapshots shown on the line graphs; overridable
+// per chart via the settings dialog (stored in localStorage).
+const MAX_POINTS = 25;
 const METRICS = [
   { id: 'tls-versions', title: 'SSL/TLS Versions Negotiated', type: 'stacked', unit: '%',
     wiki: 'https://en.wikipedia.org/wiki/Transport_Layer_Security',
@@ -350,6 +353,147 @@ function showInfoDialog(title, description) {
   infoDialog.showModal();
 }
 
+// --- Chart settings (data range slider) ---------------------------------
+// One shared settings dialog; the slider controls how many of the most
+// recent snapshots the line graph of the selected chart displays.
+let settingsDialog = null;
+let activeRangeEntry = null;
+
+// Return `normalized` limited to snapshot indices [start, end] (inclusive).
+function sliceSeries(normalized, start, end) {
+  const n = normalized.series[0].length;
+  const from = Math.max(0, Math.min(start, n - 1));
+  const to = Math.max(from, Math.min(end, n - 1));
+  return {
+    keys: normalized.keys,
+    series: normalized.series.map(row => row.slice(from, to + 1)),
+  };
+}
+
+// (Re)draw the line chart of one chartData entry with its current range.
+function renderLineChart(entry) {
+  const { canvas, legendContainer, normalized, metric } = entry;
+  if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return;
+  if (entry.u) {
+    entry.u.destroy();
+    entry.u = null;
+  }
+  if (legendContainer) legendContainer.innerHTML = '';
+  const view = sliceSeries(normalized, entry.rangeStart, entry.rangeEnd);
+  if (metric.type === 'grouped') {
+    entry.u = createGroupedChart(canvas, view, metric.title, {}, legendContainer);
+  } else {
+    entry.u = createStackedChart(canvas, view, metric.title, {});
+  }
+}
+
+// Read the stored [start, end] range for a metric, clamped to the data;
+// defaults to the last MAX_POINTS snapshots.
+function loadStoredRange(metricId, total) {
+  let stored = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(`chartRange:${metricId}`));
+  } catch { /* ignore */ }
+  if (Array.isArray(stored) && stored.length === 2 &&
+      Number.isFinite(stored[0]) && Number.isFinite(stored[1])) {
+    const start = Math.max(0, Math.min(stored[0], total - 1));
+    const end = Math.max(start, Math.min(stored[1], total - 1));
+    return [start, end];
+  }
+  return [Math.max(0, total - MAX_POINTS), total - 1];
+}
+
+function storeRange(metricId, range) {
+  try {
+    localStorage.setItem(`chartRange:${metricId}`, JSON.stringify(range));
+  } catch { /* ignore */ }
+}
+
+function updateRangeLabels(entry) {
+  const times = entry.normalized.series[0];
+  const fmt = (i) => new Date(times[i]).toLocaleDateString();
+  settingsDialog.querySelector('#range-start-value').textContent = fmt(entry.rangeStart);
+  settingsDialog.querySelector('#range-end-value').textContent = fmt(entry.rangeEnd);
+  settingsDialog.querySelector('#range-length').textContent =
+    `${entry.rangeEnd - entry.rangeStart + 1} scan(s)`;
+  // Paint the blue fill exactly between the two thumbs.
+  // Thumb centre for fraction f: f*(W - T) + T/2  ==  W*f + T*(0.5 - f)
+  const total = times.length;
+  const sFrac = total > 1 ? entry.rangeStart / (total - 1) : 0;
+  const eFrac = total > 1 ? entry.rangeEnd / (total - 1) : 0;
+  const T = 20; // thumb width incl. border, must match CSS
+  const fill = settingsDialog.querySelector('#range-fill');
+  fill.style.left =
+    `calc(${(sFrac * 100).toFixed(2)}% + ${((0.5 - sFrac) * T).toFixed(2)}px)`;
+  fill.style.width =
+    `calc(${((eFrac - sFrac) * 100).toFixed(2)}% + ${((sFrac - eFrac) * T).toFixed(2)}px)`;
+}
+
+// Sync entry range from the two sliders, clamping them so start <= end.
+function applyRangeFromSliders(changed) {
+  if (!activeRangeEntry) return;
+  const entry = activeRangeEntry;
+  const startSlider = settingsDialog.querySelector('#range-start');
+  const endSlider = settingsDialog.querySelector('#range-end');
+  let s = parseInt(startSlider.value, 10);
+  let e = parseInt(endSlider.value, 10);
+  if (s > e) {
+    if (changed === 'start') { e = s; endSlider.value = e; }
+    else { s = e; startSlider.value = s; }
+  }
+  entry.rangeStart = s;
+  entry.rangeEnd = e;
+  storeRange(entry.metric.id, [s, e]);
+  updateRangeLabels(entry);
+  renderLineChart(entry);
+}
+
+function showRangeDialog(entry) {
+  if (!settingsDialog) {
+    settingsDialog = document.createElement('dialog');
+    settingsDialog.id = 'settings-dialog';
+    settingsDialog.innerHTML = `
+      <div class="dialog-header">
+        <h3 class="dialog-title">Chart settings</h3>
+        <button class="dialog-close" type="button" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="dialog-body">
+        <div class="range-row">
+          <label>From: <strong id="range-start-value"></strong> — To: <strong id="range-end-value"></strong></label>
+          <div class="range-track">
+            <div class="range-fill" id="range-fill"></div>
+            <input type="range" id="range-start" class="range-slider dual" aria-label="Range start">
+            <input type="range" id="range-end" class="range-slider dual" aria-label="Range end">
+          </div>
+        </div>
+        <div class="range-summary">Displaying <span id="range-length"></span></div>
+      </div>`;
+    document.body.appendChild(settingsDialog);
+    settingsDialog.querySelector('.dialog-close').addEventListener('click', () => settingsDialog.close());
+    settingsDialog.addEventListener('click', (e) => {
+      if (e.target === settingsDialog) settingsDialog.close();
+    });
+    settingsDialog.querySelector('#range-start').addEventListener('input', () => applyRangeFromSliders('start'));
+    settingsDialog.querySelector('#range-end').addEventListener('input', () => applyRangeFromSliders('end'));
+    // Keep the thumb you grabbed on top when they overlap
+    const startSlider = settingsDialog.querySelector('#range-start');
+    const endSlider = settingsDialog.querySelector('#range-end');
+    startSlider.addEventListener('pointerdown', () => { startSlider.style.zIndex = 5; endSlider.style.zIndex = 3; });
+    endSlider.addEventListener('pointerdown', () => { endSlider.style.zIndex = 5; startSlider.style.zIndex = 3; });
+  }
+
+  activeRangeEntry = entry;
+  const total = entry.normalized.series[0].length;
+  const startSlider = settingsDialog.querySelector('#range-start');
+  const endSlider = settingsDialog.querySelector('#range-end');
+  startSlider.max = total - 1;
+  endSlider.max = total - 1;
+  startSlider.value = entry.rangeStart;
+  endSlider.value = entry.rangeEnd;
+  updateRangeLabels(entry);
+  settingsDialog.showModal();
+}
+
 async function loadAndRender() {
   const chartsContainer = document.getElementById('charts');
  
@@ -374,7 +518,7 @@ async function loadAndRender() {
         latestSampleSize = lastSnap.sample_size;
       }
  
-      // Normalize and convert to percentages
+      // Normalize full history (display range is applied at render time)
       let normalized = normalizeHistory(history);
       if (!normalized) continue;
  
@@ -406,6 +550,7 @@ async function loadAndRender() {
         card.innerHTML = `<div class="card-header">
             <h2>${metric.title}</h2>
             <div class="card-actions">
+              <button class="gear-btn" type="button" aria-label="Chart settings" title="Chart settings">&#9881;</button>
               <button class="info-btn" type="button" aria-label="What this graph shows">i</button>
               <a class="wiki-btn" href="${metric.wiki}" target="_blank" rel="noopener noreferrer" aria-label="Wikipedia article about this topic" title="Wikipedia article">&#8599;</a>
             </div>
@@ -418,6 +563,7 @@ async function loadAndRender() {
         card.innerHTML = `<div class="card-header">
             <h2>${metric.title}</h2>
             <div class="card-actions">
+              <button class="gear-btn" type="button" aria-label="Chart settings" title="Chart settings">&#9881;</button>
               <button class="info-btn" type="button" aria-label="What this graph shows">i</button>
               <a class="wiki-btn" href="${metric.wiki}" target="_blank" rel="noopener noreferrer" aria-label="Wikipedia article about this topic" title="Wikipedia article">&#8599;</a>
             </div>
@@ -439,8 +585,16 @@ async function loadAndRender() {
       const pieCanvas = metric.id === 'extensions' ? null : card.querySelector('.pie-canvas');
       const pieLegend = metric.id === 'extensions' ? null : card.querySelector('.pie-legend');
   
-      // Store for second pass
-      chartData.push({ canvas, legendContainer, pieCanvas, pieLegend, normalized, metric });
+      // Store for second pass; default range is the last MAX_POINTS snapshots
+      // unless the user chose a specific range before
+      const [rangeStart, rangeEnd] = loadStoredRange(metric.id, normalized.series[0].length);
+      const entry = {
+        canvas, legendContainer, pieCanvas, pieLegend, normalized, metric,
+        rangeStart, rangeEnd,
+        u: null,
+      };
+      card.querySelector('.gear-btn').addEventListener('click', () => showRangeDialog(entry));
+      chartData.push(entry);
  
     } catch (err) {
       console.error(`Failed to render ${metric.id}:`, err);
@@ -465,16 +619,10 @@ async function loadAndRender() {
 
   // Second pass: create all charts after layout settles
   requestAnimationFrame(() => {
-    for (const { canvas, legendContainer, pieCanvas, pieLegend, normalized, metric } of chartData) {
-      if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
-        if (metric.type === 'grouped') {
-          createGroupedChart(canvas, normalized, metric.title, {}, legendContainer);
-        } else {
-          createStackedChart(canvas, normalized, metric.title, {});
-        }
-        if (pieCanvas) {
-          drawPieChart(pieCanvas, pieLegend, normalized.keys, normalized.series, {});
-        }
+    for (const entry of chartData) {
+      renderLineChart(entry);
+      if (entry.pieCanvas) {
+        drawPieChart(entry.pieCanvas, entry.pieLegend, entry.normalized.keys, entry.normalized.series, {});
       }
     }
   });

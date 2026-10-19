@@ -4,21 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"runtime"
-	"sort"
-	"sync"
 	"time"
 
-	"observatory-certificates/scanner/tranco"
-	"observatory-certificates/scanner/scan"
-	"observatory-certificates/scanner/output"
+	"observatory-sslcert/scanner/output"
+	"observatory-sslcert/scanner/scan"
+	"observatory-sslcert/scanner/tranco"
 )
 
 func main() {
 	sampleSize := flag.Int("sample", 2500, "Number of domains to scan")
-	outputDir := flag.String("output", "data", "Output directory for JSON files")
+	outputDir := flag.String("output", "site/data", "Output directory for JSON files")
 	timeoutSec := flag.Int("timeout", 10, "Connection timeout in seconds")
 	concurrency := flag.Int("concurrency", 50, "Max concurrent connections")
 	userAgent := flag.String("user-agent", "CertificateObservatory/1.0", "User agent string")
@@ -69,19 +64,26 @@ func main() {
 
 	// Load existing history and append
 	log.Printf("Loading existing history from %s...", *outputDir)
-	history, err := output.LoadHistory(*outputDir)
+	history, warnings, err := output.LoadHistory(*outputDir)
 	if err != nil {
 		log.Printf("Warning: could not load history: %v", err)
 		history = make(map[string][]output.Snapshot)
+	}
+	for _, w := range warnings {
+		log.Printf("Warning: %s", w)
 	}
 
 	// Append new snapshot
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	for metricName, metricData := range metrics {
+		data := make(map[string]interface{}, len(metricData))
+		for k, v := range metricData {
+			data[k] = v
+		}
 		snapshot := output.Snapshot{
-			Timestamp: timestamp,
+			Timestamp:  timestamp,
 			SampleSize: results.SuccessCount,
-			Data:      metricData,
+			Data:       data,
 		}
 		history[metricName] = append(history[metricName], snapshot)
 	}

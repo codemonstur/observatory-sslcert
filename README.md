@@ -7,7 +7,7 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  GitHub Action  │────▶│  Scanner (Go)    │────▶│  JSON Files     │
-│  (weekly cron)  │     │  - Tranco list   │     │  /data/         │
+│  (weekly cron)  │     │  - Tranco list   │     │  site/data/     │
 └─────────────────┘     │  - 2500 random   │     │  - tls-versions │
                         │  - TLS handshake │     │  - cipher-suites│
                         │  - X.509 parse   │     │  - key-algos    │
@@ -55,13 +55,13 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 
 ```bash
 # Build scanner
-cd scanner && go build -o ../bin/scanner .
+make build            # or: cd scanner && go build -o ../bin/scanner .
 
-# Run scanner locally (uses cached Tranco list)
-./bin/scanner -sample 100 -output ../data
+# Run scanner locally (writes to site/data, the directory the site reads from)
+make scan SAMPLE=100  # or: ./bin/scanner -sample 100
 
 # Serve static site locally
-cd site && python3 -m http.server 8080
+make serve            # or: cd site && python3 -m http.server 8080
 # Open http://localhost:8080
 ```
 
@@ -69,14 +69,15 @@ cd site && python3 -m http.server 8080
 
 1. Push to GitHub
 2. Enable GitHub Pages (source: `/site` folder)
-3. GitHub Action runs weekly, commits updated JSON to `data/`
+3. GitHub Action runs weekly, commits updated JSON to `site/data/`
 4. Site auto-updates on push
 
 ## Directory Structure
 
 ```
-observatory-certificates/
+observatory-sslcert/
 ├── .github/workflows/scan.yml    # GitHub Action workflow
+├── Makefile                      # Build/dev tasks (make help)
 ├── scanner/                      # Go TLS scanner
 │   ├── main.go
 │   ├── scan.go
@@ -87,9 +88,9 @@ observatory-certificates/
 │   ├── index.html
 │   ├── charts.js
 │   ├── style.css
-│   └── lib/                      # Chart library (uPlot)
-└── data/                         # JSON output (committed by Action)
-    ├── tls-versions.json
-    ├── cipher-suites.json
-    └── ...
+│   ├── lib/                      # Chart library (uPlot)
+│   └── data/                     # JSON output (committed by Action)
+│       ├── tls-versions.json
+│       ├── cipher-suites.json
+│       └── ...
 ```
