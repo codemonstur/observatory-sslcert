@@ -1,0 +1,7 @@
+[
+  {"timestamp":"2026-01-01T00:00:00Z","sample_size":2500,"data":{"Let's Encrypt":1200,"Google Trust Services":400,"Sectigo":300,"DigiCert":250,"ZeroSSL":150,"Buypass":100,"Cloudflare":100}},
+  {"timestamp":"2026-01-08T00:00:00Z","sample_size":2500,"data":{"Let's Encrypt":1220,"Google Trust Services":410,"Sectigo":290,"DigiCert":240,"ZeroSSL":150,"Buypass":90,"Cloudflare":100}},
+  {"timestamp":"2026-01-15T00:00:00Z","sample_size":2500,"data":{"Let's Encrypt":1240,"Google Trust Services":420,"Sectigo":280,"DigiCert":230,"ZeroSSL":150,"Buypass":80,"Cloudflare":100}},
+  {"timestamp":"2026-01-22T00:00:00Z","sample_size":2500,"data":{"Let's Encrypt":1250,"Google Trust Services":430,"Sectigo":270,"DigiCert":220,"ZeroSSL":150,"Buypass":80,"Cloudflare":100}},
+  {"timestamp":"2026-01-29T00:00:00Z","sample_size":2500,"data":{"Let's Encrypt":1260,"Google Trust Services":440,"Sectigo":260,"DigiCert":210,"ZeroSSL":150,"Buypass":80,"Cloudflare":100}}
+]

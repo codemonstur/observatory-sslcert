@@ -1,0 +1,493 @@
+// Certificate Observatory - Chart Rendering
+// Uses uPlot (https://github.com/leeoniya/uPlot)
+
+import uPlot from './lib/dist/uPlot.esm.js';
+
+const DATA_DIR = 'data/';
+const METRICS = [
+  { id: 'tls-versions', title: 'SSL/TLS Versions Negotiated', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Transport_Layer_Security',
+    description: 'Share of scanned sites whose TLS handshake negotiated each protocol version (SSL 3.0 and TLS 1.0–1.3). The pie chart shows the breakdown of the most recent scan. A growing TLS 1.3 share and shrinking legacy versions indicate the ecosystem is modernising; older versions stay visible because some servers still accept them.' },
+  { id: 'cipher-suites', title: 'Cipher Suites (Top 15)', type: 'stacked', unit: '%', limit: 15,
+    wiki: 'https://en.wikipedia.org/wiki/Cipher_suite',
+    description: 'The 15 most common cipher suites negotiated during handshakes, as a percentage of the sample (renormalised over the top 15). Weak or deprecated suites — such as those using RC4, 3DES or CBC with SHA-1 — signal outdated server configuration.' },
+  { id: 'key-algorithms', title: 'Public Key Algorithms', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Public-key_cryptography',
+    description: 'Distribution of the algorithms used in certificate public keys (RSA, ECDSA, EdDSA, …). A shift towards ECDSA and EdDSA reflects migration to shorter, faster keys.' },
+  { id: 'signature-algorithms', title: 'Signature Algorithms', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Digital_signature',
+    description: 'Algorithms used to sign the certificates themselves (e.g. sha256WithRSAEncryption, ecdsa-with-SHA384). SHA-1 signatures are deprecated and should no longer appear on publicly trusted certificates.' },
+  { id: 'validity-periods', title: 'Certificate Validity Periods', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/X.509',
+    description: 'How long certificates are issued for, bucketed by lifetime. Public CAs cap subscriber certificates at 398 days, so longer lifetimes usually mean internal, self-signed or legacy certificates.' },
+  { id: 'san-counts', title: 'SAN Entry Count per Certificate', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Subject_Alternative_Name',
+    description: 'Number of Subject Alternative Name entries per certificate, in buckets. Certificates with many SANs cover several hostnames at once, common for multi-domain setups.' },
+  { id: 'ca-market-share', title: 'CA Market Share (Top 10)', type: 'stacked', unit: '%', limit: 10,
+    wiki: 'https://en.wikipedia.org/wiki/Certificate_authority',
+    description: 'Share of certificates issued by the top 10 certificate authorities across the sampled sites (percentages renormalised over the top 10). Shows how concentrated the CA ecosystem is.' },
+  { id: 'ocsp-stapling', title: 'OCSP Stapling Support', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/OCSP_stapling',
+    description: 'Whether servers deliver a stapled OCSP response during the handshake. Stapling improves privacy and reliability compared with clients querying the CA directly; "Supported" means the server returned a valid, unexpired staple.' },
+  { id: 'certificate-transparency', title: 'Certificate Transparency (SCTs)', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Certificate_Transparency',
+    description: 'Number of Signed Certificate Timestamps attached to each certificate. CT is mandatory for publicly trusted certificates; multiple SCTs mean the certificate is logged in several independent CT logs.' },
+  { id: 'extensions', title: 'X.509 Extensions Present', type: 'grouped', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/X.509',
+    description: 'The share of certificates containing each X.509 extension (key usage, SAN, basic constraints, …). A certificate can carry several extensions at once, so the lines are independent and do not add up to 100%.' },
+  { id: 'key-sizes', title: 'Public Key Sizes', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Key_size',
+    description: 'Strength of certificate public keys: RSA key sizes (1024 / 2048 / 4096+ bits) and ECDSA curve sizes (P-256 / P-384 / P-521). RSA-1024 is considered insecure; RSA-2048 and P-256 are the current baseline.' },
+  { id: 'hash-algorithms', title: 'Hash Algorithms', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Cryptographic_hash_function',
+    description: 'Hash algorithms used in certificate signatures (SHA-1, SHA-256, SHA-384, SHA-512, MD5). MD5 and SHA-1 are deprecated and should not appear in modern certificates.' },
+  { id: 'wildcard-certs', title: 'Wildcard Certificates', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Wildcard_certificate',
+    description: 'Share of certificates whose primary domain starts with "*.", i.e. wildcards covering a whole subdomain level (e.g. *.example.com).' },
+  { id: 'self-signed', title: 'Self-Signed Certificates', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/Self-signed_certificate',
+    description: 'Share of certificates where issuer equals subject, i.e. self-signed. These are typically internal, test or IoT certificates rather than publicly trusted ones.' },
+  { id: 'expired-certs', title: 'Expired Certificates in Use', type: 'stacked', unit: '%',
+    wiki: 'https://en.wikipedia.org/wiki/X.509',
+    description: 'Share of sampled sites serving a certificate that had already passed its notAfter date at scan time. Browsers reject these, so the signal indicates misconfiguration or neglect.' },
+];
+
+const COLORS = [
+  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+  '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ac',
+  '#86bcb6', '#d7b5a6', '#a0cbe8', '#f1ce63', '#d4a6c8',
+];
+
+async function fetchJSON(name) {
+  const res = await fetch(`${DATA_DIR}${name}.json?v=${Date.now()}`);
+  if (!res.ok) throw new Error(`Failed to load ${name}: ${res.status}`);
+  return res.json();
+}
+
+function normalizeHistory(history) {
+  // Convert [{timestamp, sample_size, data: {...}}, ...] to uPlot format
+  // uPlot expects: [ [timestamps], [series1], [series2], ... ]
+  if (!history || history.length === 0) return null;
+
+  // Collect all keys across all snapshots
+  const allKeys = new Set();
+  for (const snap of history) {
+    for (const key of Object.keys(snap.data)) {
+      allKeys.add(key);
+    }
+  }
+  const keys = Array.from(allKeys).sort();
+
+  // Build series: first row is timestamps, then one row per key
+  const series = new Array(keys.length + 1); // +1 for timestamps
+  series[0] = history.map(s => new Date(s.timestamp).getTime());
+
+  for (let i = 0; i < keys.length; i++) {
+    series[i + 1] = history.map(s => {
+      const val = s.data[keys[i]];
+      return typeof val === 'number' ? val : (val || 0);
+    });
+  }
+
+  return { keys, series };
+}
+
+function computePercentages(series) {
+  // Convert absolute counts to percentages per timestamp
+  const n = series[0].length;
+  const m = series.length - 1;
+  for (let i = 0; i < n; i++) {
+    let total = 0;
+    for (let j = 1; j <= m; j++) {
+      total += series[j][i];
+    }
+    if (total > 0) {
+      for (let j = 1; j <= m; j++) {
+        series[j][i] = (series[j][i] / total) * 100;
+      }
+    }
+  }
+  return series;
+}
+
+function createStackedChart(container, { keys, series }, title, colorMap) {
+  // Use non-stacked lines for percentage data - each series shows its % over time
+  // Explicitly set width/height from container since uPlot doesn't auto-read CSS dimensions
+  const width = container.clientWidth;
+  const height = container.clientHeight || 300;
+  const opts = {
+    width: width,
+    height: height,
+    series: [
+      { label: 'Time', value: (u, v) => new Date(v).toLocaleDateString() },
+      ...keys.map((key, i) => ({
+        label: key,
+        stroke: colorMap[key] || COLORS[i % COLORS.length],
+        fill: null, // No fill - lines only
+        width: 2,
+        paths: uPlot.paths.linear(),
+      })),
+    ],
+    axes: [
+      { scale: 'x', stroke: '#ccc', grid: { stroke: '#eee' },
+        values: (u, splits) => splits.map(s => (isNaN(s) ? '' : new Date(s).toLocaleDateString())) },
+      { scale: 'y', stroke: '#ccc', grid: { stroke: '#eee' }, label: '%' },
+    ],
+    scales: {
+      x: { time: true },
+      y: { min: 0, max: 100 },
+    },
+    cursor: { show: true, x: false, y: false, focus: { prox: 100 } },
+    legend: { show: false },
+  };
+
+  return new uPlot(opts, series, container);
+}
+
+function createGroupedChart(container, { keys, series }, title, colorMap, legendContainer) {
+  // Build custom legend first (sorted by percentage descending)
+  if (legendContainer) {
+    legendContainer.innerHTML = '';
+    const lastIdx = series[0].length - 1;
+    const percentages = keys.map((key, i) => series[i + 1][lastIdx]);
+    const sorted = keys.map((key, i) => ({ key, pct: percentages[i], color: colorMap[key] || COLORS[i % COLORS.length] }))
+      .sort((a, b) => b.pct - a.pct);
+    sorted.forEach(({ key, color }) => {
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '6px';
+      item.style.marginBottom = '4px';
+      item.style.fontSize = '11px';
+      const marker = document.createElement('div');
+      marker.style.width = '12px';
+      marker.style.height = '12px';
+      marker.style.backgroundColor = color;
+      marker.style.borderRadius = '2px';
+      marker.style.flexShrink = '0';
+      const label = document.createElement('div');
+      label.textContent = key;
+      label.style.color = '#333';
+      item.appendChild(marker);
+      item.appendChild(label);
+      legendContainer.appendChild(item);
+    });
+    // Force layout reflow so container.clientWidth reflects legend width
+    void legendContainer.offsetHeight;
+  }
+
+  // For extensions: grouped bar chart (not stacked)
+  // Explicitly set width/height from container since uPlot doesn't auto-read CSS dimensions
+  const width = container.clientWidth;
+  const height = container.clientHeight || 300;
+  const opts = {
+    width: width,
+    height: height,
+    series: [
+      { label: 'Time', value: (u, v) => new Date(v).toLocaleDateString() },
+      ...keys.map((key, i) => ({
+        label: key,
+        stroke: colorMap[key] || COLORS[i % COLORS.length],
+        fill: null,
+        width: 2,
+        paths: uPlot.paths.linear(),
+      })),
+    ],
+    axes: [
+      { scale: 'x', stroke: '#ccc', grid: { stroke: '#eee' },
+        values: (u, splits) => splits.map(s => (isNaN(s) ? '' : new Date(s).toLocaleDateString())) },
+      { scale: 'y', stroke: '#ccc', grid: { stroke: '#eee' }, label: '%' },
+    ],
+    scales: {
+      x: { time: true },
+      y: { min: 0, max: 100 },
+    },
+    cursor: { show: true, x: false, y: false, focus: { prox: 100 } },
+    legend: { show: false },
+  };
+
+  const chart = new uPlot(opts, series, container);
+
+  return chart;
+}
+ 
+function drawPieChart(canvas, legendEl, keys, series, colorMap) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = 160;
+  const cssHeight = 160;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  canvas.style.width = cssWidth + 'px';
+  canvas.style.height = cssHeight + 'px';
+  ctx.scale(dpr, dpr);
+
+  const lastIdx = series[0].length - 1;
+  const percentages = keys.map((key, i) => series[i + 1][lastIdx]);
+
+  const centerX = cssWidth / 2;
+  const centerY = cssHeight / 2;
+  const radius = Math.min(cssWidth, cssHeight) / 2 - 5;
+
+  let startAngle = -Math.PI / 2;
+  for (let i = 0; i < keys.length; i++) {
+    const sliceAngle = (percentages[i] / 100) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+    ctx.closePath();
+    ctx.fillStyle = colorMap[keys[i]] || COLORS[i % COLORS.length];
+    ctx.fill();
+    startAngle += sliceAngle;
+  }
+
+  // Draw legend (sorted by percentage descending)
+  if (legendEl) {
+    legendEl.innerHTML = '';
+    // Sort keys by percentage descending
+    const sortedIndices = keys.map((key, i) => ({ key, pct: percentages[i], color: colorMap[key] || COLORS[i % COLORS.length], idx: i }))
+      .sort((a, b) => b.pct - a.pct);
+    for (const { key, pct, color } of sortedIndices) {
+      const item = document.createElement('div');
+      item.className = 'pie-legend-item';
+      const colorEl = document.createElement('div');
+      colorEl.className = 'pie-legend-color';
+      colorEl.style.backgroundColor = color;
+      const label = document.createElement('div');
+      label.className = 'pie-legend-label';
+      label.textContent = `${key}: ${pct.toFixed(1)}%`;
+      item.appendChild(colorEl);
+      item.appendChild(label);
+      legendEl.appendChild(item);
+    }
+  }
+}
+function buildSideMenu() {
+  const menuList = document.getElementById('menu-list');
+  if (!menuList) return;
+  menuList.innerHTML = '';
+
+  for (const metric of METRICS) {
+    const target = document.getElementById(metric.id);
+    if (!target) continue;
+
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `#${metric.id}`;
+    a.textContent = metric.title;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      pinnedLink = a; // keep this item highlighted during/after smooth scroll
+      setActiveMenuLink(a);
+      history.replaceState(null, '', `#${metric.id}`);
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    li.appendChild(a);
+    menuList.appendChild(li);
+  }
+
+  // Unpin when the user scrolls themselves (wheel/touch/keys/scrollbar)
+  const unpin = () => { pinnedLink = null; };
+  window.addEventListener('wheel', unpin, { passive: true });
+  window.addEventListener('touchmove', unpin, { passive: true });
+  window.addEventListener('keydown', unpin);
+
+  // Scrollspy: highlight the menu item of the chart at the top of the viewport
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      const links = menuList.querySelectorAll('a');
+      if (pinnedLink && menuList.contains(pinnedLink)) {
+        setActiveMenuLink(pinnedLink);
+        return;
+      }
+      let activeLink = null;
+      for (const link of links) {
+        const el = document.getElementById(link.getAttribute('href').slice(1));
+        if (el && el.getBoundingClientRect().top <= 150) activeLink = link;
+      }
+      if (!activeLink && links.length) activeLink = links[0];
+      if (activeLink) setActiveMenuLink(activeLink);
+    });
+  }, { passive: true });
+}
+
+let pinnedLink = null;
+
+function setActiveMenuLink(active) {
+  const menuList = document.getElementById('menu-list');
+  if (!menuList) return;
+  menuList.querySelectorAll('a').forEach(a => a.classList.toggle('active', a === active));
+}
+
+// --- Info dialogs -------------------------------------------------------
+// One shared <dialog> element, populated per metric on open.
+let infoDialog = null;
+
+function showInfoDialog(title, description) {
+  if (!infoDialog) {
+    infoDialog = document.createElement('dialog');
+    infoDialog.id = 'info-dialog';
+    infoDialog.innerHTML = `
+      <div class="dialog-header">
+        <h3 class="dialog-title"></h3>
+        <button class="dialog-close" type="button" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="dialog-body"></div>`;
+    document.body.appendChild(infoDialog);
+    infoDialog.querySelector('.dialog-close').addEventListener('click', () => infoDialog.close());
+    // Click on the backdrop (the dialog element itself, outside its box) closes it
+    infoDialog.addEventListener('click', (e) => {
+      if (e.target === infoDialog) infoDialog.close();
+    });
+  }
+  infoDialog.querySelector('.dialog-title').textContent = title;
+  infoDialog.querySelector('.dialog-body').textContent =
+    `${description} Data: 2,500 random domains from the Tranco Top 1M list, scanned weekly.`;
+  infoDialog.showModal();
+}
+
+async function loadAndRender() {
+  const chartsContainer = document.getElementById('charts');
+ 
+  let latestTimestamp = '';
+  let latestSampleSize = 0;
+  const chartData = [];
+ 
+  // First pass: fetch all data and create chart cards
+  for (const metric of METRICS) {
+    try {
+      const history = await fetchJSON(metric.id);
+ 
+      if (!history || history.length === 0) {
+        console.warn(`No data for ${metric.id}`);
+        continue;
+      }
+ 
+      // Track latest timestamp across all metrics
+      const lastSnap = history[history.length - 1];
+      if (new Date(lastSnap.timestamp) > new Date(latestTimestamp)) {
+        latestTimestamp = lastSnap.timestamp;
+        latestSampleSize = lastSnap.sample_size;
+      }
+ 
+      // Normalize and convert to percentages
+      let normalized = normalizeHistory(history);
+      if (!normalized) continue;
+ 
+      // Apply limit for top-N metrics
+      if (metric.limit && normalized.keys.length > metric.limit) {
+        const lastIdx = normalized.series[0].length - 1;
+        const keyValues = normalized.keys.map((key, i) => ({
+          key,
+          value: normalized.series[i + 1][lastIdx],
+          color: COLORS[i % COLORS.length],
+        }));
+        keyValues.sort((a, b) => b.value - a.value);
+        const topKeys = keyValues.slice(0, metric.limit).map(k => k.key);
+        const topColors = Object.fromEntries(keyValues.slice(0, metric.limit).map(k => [k.key, k.color]));
+ 
+        const indices = normalized.keys.map((k, i) => topKeys.includes(k) ? i : -1).filter(i => i >= 0);
+        normalized.keys = topKeys;
+        normalized.series = [normalized.series[0], ...indices.map(i => normalized.series[i + 1])];
+        computePercentages(normalized.series);
+      } else {
+        computePercentages(normalized.series);
+      }
+ 
+      // Create chart container
+      const card = document.createElement('div');
+      card.className = 'chart-card';
+      card.id = metric.id;
+      if (metric.id === 'extensions') {
+        card.innerHTML = `<div class="card-header">
+            <h2>${metric.title}</h2>
+            <div class="card-actions">
+              <button class="info-btn" type="button" aria-label="What this graph shows">i</button>
+              <a class="wiki-btn" href="${metric.wiki}" target="_blank" rel="noopener noreferrer" aria-label="Wikipedia article about this topic" title="Wikipedia article">&#8599;</a>
+            </div>
+          </div>
+          <div class="chart-row">
+            <div class="chart-canvas"></div>
+            <div class="chart-legend"></div>
+          </div>`;
+      } else {
+        card.innerHTML = `<div class="card-header">
+            <h2>${metric.title}</h2>
+            <div class="card-actions">
+              <button class="info-btn" type="button" aria-label="What this graph shows">i</button>
+              <a class="wiki-btn" href="${metric.wiki}" target="_blank" rel="noopener noreferrer" aria-label="Wikipedia article about this topic" title="Wikipedia article">&#8599;</a>
+            </div>
+          </div>
+          <div class="chart-row">
+            <div class="chart-canvas"></div>
+            <div class="pie-container">
+              <canvas class="pie-canvas"></canvas>
+              <div class="pie-legend"></div>
+            </div>
+          </div>`;
+      }
+      chartsContainer.appendChild(card);
+      card.querySelector('.info-btn').addEventListener('click', () =>
+        showInfoDialog(metric.title, metric.description || ''));
+  
+      const canvas = card.querySelector('.chart-canvas');
+      const legendContainer = metric.id === 'extensions' ? card.querySelector('.chart-legend') : null;
+      const pieCanvas = metric.id === 'extensions' ? null : card.querySelector('.pie-canvas');
+      const pieLegend = metric.id === 'extensions' ? null : card.querySelector('.pie-legend');
+  
+      // Store for second pass
+      chartData.push({ canvas, legendContainer, pieCanvas, pieLegend, normalized, metric });
+ 
+    } catch (err) {
+      console.error(`Failed to render ${metric.id}:`, err);
+      const card = document.createElement('div');
+      card.className = 'chart-card error';
+      card.id = metric.id;
+      card.innerHTML = `<div class="card-header">
+          <h2>${metric.title}</h2>
+          <div class="card-actions">
+            <button class="info-btn" type="button" aria-label="What this graph shows">i</button>
+            <a class="wiki-btn" href="${metric.wiki}" target="_blank" rel="noopener noreferrer" aria-label="Wikipedia article about this topic" title="Wikipedia article">&#8599;</a>
+          </div>
+        </div><p class="error">Failed to load: ${err.message}</p>`;
+      chartsContainer.appendChild(card);
+      card.querySelector('.info-btn').addEventListener('click', () =>
+        showInfoDialog(metric.title, metric.description || ''));
+    }
+  }
+
+  // Build the left navigation menu now that cards exist
+  buildSideMenu();
+
+  // Second pass: create all charts after layout settles
+  requestAnimationFrame(() => {
+    for (const { canvas, legendContainer, pieCanvas, pieLegend, normalized, metric } of chartData) {
+      if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+        if (metric.type === 'grouped') {
+          createGroupedChart(canvas, normalized, metric.title, {}, legendContainer);
+        } else {
+          createStackedChart(canvas, normalized, metric.title, {});
+        }
+        if (pieCanvas) {
+          drawPieChart(pieCanvas, pieLegend, normalized.keys, normalized.series, {});
+        }
+      }
+    }
+  });
+}
+ 
+// Handle window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    location.reload(); // Simple approach: reload to recalculate chart sizes
+  }, 250);
+});
+ 
+// Start
+loadAndRender().catch(console.error);
