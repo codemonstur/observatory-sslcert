@@ -1,6 +1,9 @@
 package scan
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/tls"
 	"encoding/asn1"
 	"fmt"
@@ -99,8 +102,12 @@ func aggregateKeyAlgorithms(results *ScanResults) map[string]int {
 		var keyDesc string
 
 		switch k := pub.(type) {
-		case interface{ Size() int }:
-			keyDesc = fmt.Sprintf("%s-%d", leaf.PublicKeyAlgorithm, k.Size())
+		case *rsa.PublicKey:
+			keyDesc = fmt.Sprintf("RSA-%d", k.N.BitLen())
+		case *ecdsa.PublicKey:
+			keyDesc = fmt.Sprintf("ECDSA-P-%d", k.Curve.Params().BitSize)
+		case ed25519.PublicKey:
+			keyDesc = "Ed25519"
 		default:
 			keyDesc = leaf.PublicKeyAlgorithm.String()
 		}
@@ -309,30 +316,30 @@ func aggregateKeySizes(results *ScanResults) map[string]int {
 		var keyDesc string
 
 		switch k := pub.(type) {
-		case interface{ Size() int }:
-			size := k.Size()
-			switch leaf.PublicKeyAlgorithm.String() {
-			case "RSA":
-				if size <= 1024 {
-					keyDesc = "RSA 1024"
-				} else if size <= 2048 {
-					keyDesc = "RSA 2048"
-				} else if size <= 4096 {
-					keyDesc = "RSA 4096"
-				} else {
-					keyDesc = "RSA 8192+"
-				}
-			case "ECDSA":
-				if size <= 256 {
-					keyDesc = "ECDSA P-256"
-				} else if size <= 384 {
-					keyDesc = "ECDSA P-384"
-				} else {
-					keyDesc = "ECDSA P-521"
-				}
+		case *rsa.PublicKey:
+			bits := k.N.BitLen()
+			switch {
+			case bits <= 1024:
+				keyDesc = "RSA 1024"
+			case bits <= 2048:
+				keyDesc = "RSA 2048"
+			case bits <= 4096:
+				keyDesc = "RSA 4096"
 			default:
-				keyDesc = fmt.Sprintf("%s-%d", leaf.PublicKeyAlgorithm, size)
+				keyDesc = "RSA 8192+"
 			}
+		case *ecdsa.PublicKey:
+			bits := k.Curve.Params().BitSize
+			switch {
+			case bits <= 256:
+				keyDesc = "ECDSA P-256"
+			case bits <= 384:
+				keyDesc = "ECDSA P-384"
+			default:
+				keyDesc = "ECDSA P-521"
+			}
+		case ed25519.PublicKey:
+			keyDesc = "Ed25519"
 		default:
 			keyDesc = leaf.PublicKeyAlgorithm.String()
 		}
@@ -422,6 +429,350 @@ func aggregateExpiredCerts(results *ScanResults) map[string]int {
 			counts["expired"]++
 		} else {
 			counts["not-expired"]++
+		}
+	}
+	return counts
+}
+
+// aggregateOCSPMustStaple returns counts of certificates that carry the
+// OCSP Must-Staple extension (RFC 7633) vs. those that do not.
+func aggregateOCSPMustStaple(results *ScanResults) map[string]int {
+	counts := map[string]int{"must-staple": 0, "not-must-staple": 0}
+	oid := extensionOIDs["ocsp-must-staple"]
+	for _, r := range results.Results {
+		if !r.Success || len(r.Certificates) == 0 {
+			continue
+		}
+		leaf := r.Certificates[0]
+		found := false
+		for _, ext := range leaf.Extensions {
+			if ext.Id.Equal(oid) {
+				found = true
+				break
+			}
+		}
+		if found {
+			counts["must-staple"]++
+		} else {
+			counts["not-must-staple"]++
+		}
+	}
+	return counts
+}
+
+// aggregateCertificateLifetimeTrends buckets certificate lifetimes around the
+// CA/Browser Forum and Apple policy thresholds (90-day, 398-day, 825-day).
+func aggregateCertificateLifetimeTrends(results *ScanResults) map[string]int {
+	counts := map[string]int{
+		"0-90":    0,
+		"91-398":  0,
+		"399-825": 0,
+		"826+":    0,
+	}
+	for _, r := range results.Results {
+		if !r.Success || len(r.Certificates) == 0 {
+			continue
+		}
+		leaf := r.Certificates[0]
+		days := int(leaf.NotAfter.Sub(leaf.NotBefore).Hours() / 24)
+		switch {
+		case days <= 90:
+			counts["0-90"]++
+		case days <= 398:
+			counts["91-398"]++
+		case days <= 825:
+			counts["399-825"]++
+		default:
+			counts["826+"]++
+		}
+	}
+	return counts
+}
+
+// aggregateForwardSecrecy counts certs whose negotiated cipher uses ECDHE/DHE.
+func aggregateForwardSecrecy(results *ScanResults) map[string]int {
+	counts := map[string]int{"forward-secret": 0, "not-forward-secret": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.ForwardSecrecy {
+			counts["forward-secret"]++
+		} else {
+			counts["not-forward-secret"]++
+		}
+	}
+	return counts
+}
+
+// aggregateChainCompleteness counts certs that chain to a trusted root.
+func aggregateChainCompleteness(results *ScanResults) map[string]int {
+	counts := map[string]int{"complete": 0, "incomplete": 0}
+	for _, r := range results.Results {
+		if !r.Success || len(r.Certificates) == 0 {
+			continue
+		}
+		if r.ChainComplete {
+			counts["complete"]++
+		} else {
+			counts["incomplete"]++
+		}
+	}
+	return counts
+}
+
+// aggregateRootCADistribution counts which root CA issued the certs.
+func aggregateRootCADistribution(results *ScanResults) map[string]int {
+	counts := make(map[string]int)
+	for _, r := range results.Results {
+		if !r.Success || len(r.Certificates) == 0 {
+			continue
+		}
+		name := r.RootCA
+		if name == "" {
+			name = "Unknown"
+		}
+		counts[name]++
+	}
+	return counts
+}
+
+// aggregateKeyReuse counts domains whose leaf public key is shared by >1 domain.
+func aggregateKeyReuse(results *ScanResults) map[string]int {
+	counts := make(map[string]int)
+	keyCount := make(map[string]int)
+	for _, r := range results.Results {
+		if !r.Success || r.KeyReuseHash == "" {
+			continue
+		}
+		keyCount[r.KeyReuseHash]++
+	}
+	reused, unique := 0, 0
+	for _, r := range results.Results {
+		if !r.Success || r.KeyReuseHash == "" {
+			continue
+		}
+		if keyCount[r.KeyReuseHash] > 1 {
+			reused++
+		} else {
+			unique++
+		}
+	}
+	counts["reused"] = reused
+	counts["unique"] = unique
+	return counts
+}
+
+// aggregateCTLogDiversity buckets by number of distinct CT logs.
+func aggregateCTLogDiversity(results *ScanResults) map[string]int {
+	counts := map[string]int{"0": 0, "1": 0, "2": 0, "3+": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		n := r.CTLogDiversity
+		switch {
+		case n <= 0:
+			counts["0"]++
+		case n == 1:
+			counts["1"]++
+		case n == 2:
+			counts["2"]++
+		default:
+			counts["3+"]++
+		}
+	}
+	return counts
+}
+
+// aggregateHSTS counts HSTS header presence.
+func aggregateHSTS(results *ScanResults) map[string]int {
+	counts := map[string]int{"hsts": 0, "no-hsts": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.HSTS {
+			counts["hsts"]++
+		} else {
+			counts["no-hsts"]++
+		}
+	}
+	return counts
+}
+
+// aggregateCAA counts CAA record presence.
+func aggregateCAA(results *ScanResults) map[string]int {
+	counts := map[string]int{"caa": 0, "no-caa": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.CAA {
+			counts["caa"]++
+		} else {
+			counts["no-caa"]++
+		}
+	}
+	return counts
+}
+
+// aggregateRC4 is always 0 (RC4 removed from modern TLS stacks).
+func aggregateRC4(results *ScanResults) map[string]int {
+	counts := map[string]int{"rc4": 0, "no-rc4": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.RC4 {
+			counts["rc4"]++
+		} else {
+			counts["no-rc4"]++
+		}
+	}
+	return counts
+}
+
+// aggregateCRIME counts servers supporting TLS compression.
+func aggregateCRIME(results *ScanResults) map[string]int {
+	counts := map[string]int{"compression": 0, "no-compression": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.CRIME {
+			counts["compression"]++
+		} else {
+			counts["no-compression"]++
+		}
+	}
+	return counts
+}
+
+// aggregateSecureRenegotiation counts secure renegotiation support.
+func aggregateSecureRenegotiation(results *ScanResults) map[string]int {
+	counts := map[string]int{"secure": 0, "insecure": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.SecureRenegotiation {
+			counts["secure"]++
+		} else {
+			counts["insecure"]++
+		}
+	}
+	return counts
+}
+
+// aggregatePOODLE counts SSL 3.0 support (POODLE-vulnerable).
+func aggregatePOODLE(results *ScanResults) map[string]int {
+	counts := map[string]int{"vulnerable": 0, "not-vulnerable": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.POODLE {
+			counts["vulnerable"]++
+		} else {
+			counts["not-vulnerable"]++
+		}
+	}
+	return counts
+}
+
+// aggregateFREAK is always 0 (export ciphers removed from modern tooling).
+func aggregateFREAK(results *ScanResults) map[string]int {
+	counts := map[string]int{"vulnerable": 0, "not-vulnerable": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.FREAK {
+			counts["vulnerable"]++
+		} else {
+			counts["not-vulnerable"]++
+		}
+	}
+	return counts
+}
+
+// aggregateLogjam is always 0 (cannot be probed reliably).
+func aggregateLogjam(results *ScanResults) map[string]int {
+	counts := map[string]int{"vulnerable": 0, "not-vulnerable": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.Logjam {
+			counts["vulnerable"]++
+		} else {
+			counts["not-vulnerable"]++
+		}
+	}
+	return counts
+}
+
+// aggregateECH counts ECH support via DNS HTTPS records.
+func aggregateECH(results *ScanResults) map[string]int {
+	counts := map[string]int{"ech": 0, "no-ech": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.ECH {
+			counts["ech"]++
+		} else {
+			counts["no-ech"]++
+		}
+	}
+	return counts
+}
+
+// aggregatePQC counts servers supporting X25519MLKEM768.
+func aggregatePQC(results *ScanResults) map[string]int {
+	counts := map[string]int{"pqc": 0, "no-pqc": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.PQC {
+			counts["pqc"]++
+		} else {
+			counts["no-pqc"]++
+		}
+	}
+	return counts
+}
+
+// aggregateIPv6 counts domains reachable over IPv6.
+func aggregateIPv6(results *ScanResults) map[string]int {
+	counts := map[string]int{"ipv6": 0, "ipv4-only": 0}
+	for _, r := range results.Results {
+		if !r.Success {
+			continue
+		}
+		if r.IPv6 {
+			counts["ipv6"]++
+		} else {
+			counts["ipv4-only"]++
+		}
+	}
+	return counts
+}
+
+// aggregateIssuanceVolume counts certs issued in the last 7 days.
+func aggregateIssuanceVolume(results *ScanResults) map[string]int {
+	counts := map[string]int{"issued-last-7d": 0, "older": 0}
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	for _, r := range results.Results {
+		if !r.Success || len(r.Certificates) == 0 {
+			continue
+		}
+		if r.Certificates[0].NotBefore.After(cutoff) {
+			counts["issued-last-7d"]++
+		} else {
+			counts["older"]++
 		}
 	}
 	return counts

@@ -65,6 +65,51 @@ header h1 {
   gap: 0.5rem;
 }
 
+#side-menu .menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+#side-menu .menu-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #343a40;
+  background: #f1f3f5;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+#side-menu .menu-group-toggle:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+#side-menu .menu-group-chevron {
+  font-size: 0.7rem;
+  color: #868e96;
+}
+
+#side-menu .menu-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-left: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+#side-menu .menu-group-items li { margin: 0; }
+#side-menu .menu-group-items a { font-size: 0.8rem; padding: 0.4rem 0.65rem; }
+
 #side-menu a {
   display: block;
   padding: 0.5rem 0.75rem;

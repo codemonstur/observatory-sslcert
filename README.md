@@ -40,9 +40,11 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 | `key-algorithms.json` | RSA, ECDSA, Ed25519 key types & sizes |
 | `signature-algorithms.json` | SHA-1, SHA-256, SHA-384, etc. |
 | `validity-periods.json` | Certificate lifetime distribution |
+| `certificate-lifetime-trends.json` | Lifetime trends around 90/398/825-day policy thresholds |
 | `san-counts.json` | Number of SAN entries per cert |
 | `ca-market-share.json` | Issuer CA distribution |
 | `ocsp-stapling.json` | OCSP stapling support |
+| `ocsp-must-staple.json` | OCSP Must-Staple extension presence |
 | `certificate-transparency.json` | SCT presence |
 | `extensions.json` | Key usage, EKU, basic constraints, etc. |
 | `key-sizes.json` | RSA/ECDSA key size distribution |
@@ -50,6 +52,23 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 | `wildcard-certs.json` | Wildcard vs non-wildcard certificates |
 | `self-signed.json` | Self-signed vs CA-signed certificates |
 | `expired-certs.json` | Expired certificates still in use |
+| `forward-secrecy.json` | Forward secrecy (PFS) support |
+| `chain-completeness.json` | Certificate chain completeness |
+| `root-ca-distribution.json` | Root CA distribution |
+| `key-reuse.json` | Certificate key reuse |
+| `ct-log-diversity.json` | CT log diversity |
+| `hsts.json` | HSTS support |
+| `caa-records.json` | CAA records |
+| `rc4-support.json` | RC4 support |
+| `tls-compression.json` | TLS compression (CRIME) |
+| `secure-renegotiation.json` | Secure renegotiation |
+| `poodle.json` | POODLE (SSL 3.0) |
+| `freak.json` | FREAK |
+| `logjam.json` | Logjam |
+| `ech.json` | Encrypted Client Hello |
+| `pqc.json` | Post-quantum cryptography |
+| `ipv6-support.json` | IPv6 support |
+| `issuance-volume.json` | Certificate issuance volume |
 
 ## Local Development
 
