@@ -4,7 +4,7 @@
 
 PORT     ?= 8080
 SAMPLE   ?= 2500
-OUTPUT   ?= site/data
+OUTPUT   ?= docs/data
 BINARY   := bin/scanner
 GOFMT    := $(shell command -v gofmt 2>/dev/null)
 
@@ -19,16 +19,16 @@ help: ## Show this help
 build: ## Build the scanner into bin/scanner
 	cd scanner && go build -o ../$(BINARY) .
 
-scan: build ## Build and run a scan (SAMPLE=2500 OUTPUT=site/data)
+scan: build ## Build and run a scan (SAMPLE=2500 OUTPUT=docs/data)
 	./$(BINARY) -sample $(SAMPLE) -output $(OUTPUT)
 
 run: scan ## Alias for scan
 
 serve: ## Serve the site locally on PORT (default 8080)
-	cd site && python3 -m http.server $(PORT)
+	cd docs && python3 -m http.server $(PORT)
 
 serve-alt: ## Serve the site on a second port (8765) in parallel
-	cd site && python3 -m http.server 8765
+	cd docs && python3 -m http.server 8765
 
 fmt: ## Format Go sources
 	cd scanner && $(if $(GOFMT),gofmt -w .,go fmt ./...)
