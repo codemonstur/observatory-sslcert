@@ -87,9 +87,10 @@ make serve            # or: cd site && python3 -m http.server 8080
 ## Deployment
 
 1. Push to GitHub
-2. Enable GitHub Pages (source: `/site` folder)
-3. GitHub Action runs weekly, commits updated JSON to `site/data/`
-4. Site auto-updates on push
+2. Enable GitHub Pages: Settings → Pages → Source → **GitHub Actions** (not "Deploy from a branch")
+3. The `pages.yml` workflow deploys the `site/` folder on every push to `main`
+4. The weekly `scan.yml` workflow commits updated JSON to `site/data/`, which triggers a redeploy
+5. Site is live at https://codemonstur.github.io/observatory-sslcert/
 
 ## Directory Structure
 
