@@ -7,7 +7,7 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  GitHub Action  │────▶│  Scanner (Go)    │────▶│  JSON Files     │
-│  (weekly cron)  │     │  - Tranco list   │     │  site/data/     │
+│  (weekly cron)  │     │  - Tranco list   │     │  docs/data/     │
 └─────────────────┘     │  - 2500 random   │     │  - tls-versions │
                         │  - TLS handshake │     │  - cipher-suites│
                         │  - X.509 parse   │     │  - key-algos    │
@@ -76,11 +76,11 @@ A static-site certificate observatory that scans a random sample of the Tranco T
 # Build scanner
 make build            # or: cd scanner && go build -o ../bin/scanner .
 
-# Run scanner locally (writes to site/data, the directory the site reads from)
+# Run scanner locally (writes to docs/data, the directory the site reads from)
 make scan SAMPLE=100  # or: ./bin/scanner -sample 100
 
 # Serve static site locally
-make serve            # or: cd site && python3 -m http.server 8080
+make serve            # or: cd docs && python3 -m http.server 8080
 # Open http://localhost:8080
 ```
 
@@ -88,8 +88,8 @@ make serve            # or: cd site && python3 -m http.server 8080
 
 1. Push to GitHub
 2. Enable GitHub Pages: Settings → Pages → Source → **GitHub Actions** (not "Deploy from a branch")
-3. The `pages.yml` workflow deploys the `site/` folder on every push to `main`
-4. The weekly `scan.yml` workflow commits updated JSON to `site/data/`, which triggers a redeploy
+3. The `pages.yml` workflow deploys the `docs/` folder on every push to `main`
+4. The weekly `scan.yml` workflow commits updated JSON to `docs/data/`, which triggers a redeploy
 5. Site is live at https://codemonstur.github.io/observatory-sslcert/
 
 ## Directory Structure
@@ -104,7 +104,7 @@ observatory-sslcert/
 │   ├── parse.go
 │   ├── tranco.go
 │   └── go.mod
-├── site/                         # Static website
+├── docs/                         # Static website
 │   ├── index.html
 │   ├── charts.js
 │   ├── style.css

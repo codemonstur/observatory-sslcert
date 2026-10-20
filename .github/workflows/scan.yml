@@ -33,7 +33,7 @@ jobs:
         run: |
           ./scanner/scanner \
             -sample 2500 \
-            -output site/data \
+            -output docs/data \
             -timeout 10 \
             -concurrency 50 \
             -user-agent "CertificateObservatory/1.0 (+https://github.com/youruser/observatory-sslcert)"
@@ -41,7 +41,7 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet site/data/; then
+          if git diff --quiet docs/data/; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -52,6 +52,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data/
+          git add docs/data/
           git commit -m "chore: update certificate data $(date -u +%Y-%m-%d)"
           git push

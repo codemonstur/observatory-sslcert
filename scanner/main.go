@@ -13,7 +13,7 @@ import (
 
 func main() {
 	sampleSize := flag.Int("sample", 2500, "Number of domains to scan")
-	outputDir := flag.String("output", "site/data", "Output directory for JSON files")
+	outputDir := flag.String("output", "docs/data", "Output directory for JSON files")
 	timeoutSec := flag.Int("timeout", 10, "Connection timeout in seconds")
 	concurrency := flag.Int("concurrency", 50, "Max concurrent connections")
 	userAgent := flag.String("user-agent", "CertificateObservatory/1.0", "User agent string")
