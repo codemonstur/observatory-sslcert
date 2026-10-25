@@ -80,7 +80,7 @@ make build            # or: cd scanner && go build -o ../bin/scanner .
 make scan SAMPLE=100  # or: ./bin/scanner -sample 100
 
 # Serve static site locally
-make serve            # or: cd site && python3 -m http.server 8080
+make serve            # or: cd docs && python3 -m http.server 8080
 # Open http://localhost:8080
 ```
 
